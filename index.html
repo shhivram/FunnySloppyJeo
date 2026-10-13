@@ -167,6 +167,7 @@ const SFX = (() => {
     wah() { [392, 370, 349].forEach((f, i) => tone(f, f * .98, .4, 'sawtooth', .12, i * .42)); tone(330, 300, 1.1, 'sawtooth', .12, 1.26); },
     blip(who) { if (!gap('blip', 140)) return; const p = { shiv: 1, manny: .78, power: .66 }[who] || 1; for (let i = 0; i < 4; i++) { const f = (250 + Math.random() * 150) * p; tone(f, f * (.8 + Math.random() * .5), .05, 'square', .03, i * .07); } },
     grunt() { tone(210, 150, .16, 'sawtooth', .16); noise(.1, 900, .12, 'bandpass'); },
+    siu() { tone(330, 520, .25, 'sawtooth', .12); tone(520, 440, .9, 'sawtooth', .12, .25); noise(1.3, 700, .18, 'bandpass', .15, 1400); },
     yay() { [523, 659, 784].forEach((f, i) => tone(f, f * 1.02, .14, 'square', .07, i * .08)); },
     chirp() { if (!gap('chirp', 900)) return; [0, .07, .14].forEach(d => tone(4200, 4000, .04, 'sine', .03, d)); },
   };
@@ -272,7 +273,7 @@ function drawParts() {
     else if (p.type === 'dust') { ctx.fillStyle = '#b9a58a'; circle(p.x, p.y, p.r); ctx.fill(); }
     else if (p.type === 'ring') { ctx.strokeStyle = 'rgba(225,225,235,.75)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(p.x + Math.sin(p.life * 9) * 3, p.y, p.r, p.r * .6, 0, 0, 7); ctx.stroke(); }
     else if (p.type === 'z') { ctx.fillStyle = '#e8e0ff'; ctx.font = '400 20px Bungee, Impact, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('Z', p.x, p.y); }
-    else if (p.type === 'note') { ctx.fillStyle = '#ff6ec4'; ctx.font = '700 22px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(p.ch, p.x + Math.sin(p.life * 8) * 5, p.y); }
+    else if (p.type === 'note') { ctx.font = '700 22px sans-serif'; ctx.textAlign = 'center'; const nx = p.x + Math.sin(p.life * 8) * 5; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,246,223,.6)'; ctx.strokeText(p.ch, nx, p.y); ctx.fillStyle = '#111'; ctx.fillText(p.ch, nx, p.y); }
     else if (p.type === 'bub') { ctx.fillStyle = 'rgba(255,240,200,.8)'; circle(p.x, p.y, p.r); ctx.fill(); }
   }
   ctx.globalAlpha = 1; ctx.textAlign = 'left';
@@ -434,7 +435,7 @@ const P = { down: false, keyR: false };
 function reset() {
   Object.assign(state, {
     phase: 'walk', t: 0, pt: 0, cam: 0, night: 0, drunk: 0, round: 0, cheerT: 0, events: [],
-    shiv: { wx: 160, walk: 0, moving: false, party: 0 },
+    shiv: { wx: 160, walk: 0, moving: false, party: 0, siu: -1 },
     manny: { joined: false, wx: 1420, walk: 0, dizzy: 0, flexT: 0, lineT: 5 },
     dog: { awake: false, x: 640, barked: 0, chase: 0 },
     auto: { done: false, x: 0, on: false },
@@ -445,7 +446,9 @@ function reset() {
   chapter('walk'); SFX.ambient('walk');
   setHint('Hold the mouse (or press →) to walk Shiv from home to the HiFi Bar.');
   meter(0, 'Distance to HiFi Bar');
-  at(.5, () => { state.shiv.party = 2.6; say('shiv', 'Friday full ah kudirom!', 3.2); pop('YAAAY!', 160 - state.cam + 90, GY - 250, { snd: 'yay', color: '#ffb627', size: 22 }); });
+  at(.5, () => say('shiv', 'Friday full ah kudikurom...', 1.6));
+  at(2.0, () => { state.shiv.siu = 0; });
+  at(2.72, () => { say('shiv', 'SIUUUUU!', 1.8); dust(state.shiv.wx, GY, 8); pop('SIUUU!', state.shiv.wx - state.cam + 120, GY - 250, { snd: 'siu', color: '#e8453c', size: 34, dur: 1.6 }); });
 }
 function at(dt, fn) { state.events.push({ t: state.t + dt, fn }); }
 function loc(e) { const r = cvs.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; }
@@ -490,6 +493,7 @@ function update(dt) {
   s.events = s.events.filter(e => (e.t <= s.t ? (e.fn(), false) : true));
   if (s.phase !== 'walk') s.manny.flexT = Math.max(0, s.manny.flexT - dt);
   if (s.shiv.party > 0) s.shiv.party -= dt;
+  if (s.shiv.siu >= 0) { s.shiv.siu += dt; if (s.shiv.siu > 3.2 || s.shiv.moving) s.shiv.siu = -1; }
   if (s.phase === 'walk') updateWalk(dt);
   else if (s.phase === 'shop') { s.cam = lerp(s.cam, 2140, dt * 3); s.night = Math.min(1, s.night + dt * .2); }
   else if (s.phase === 'drink') {
@@ -610,8 +614,14 @@ function drawWalkWorld() {
   if (walking) {
     const m = s.manny, sh = s.shiv;
     if (m.joined) { const fx = m.flexT > 0, wig = Math.sin(t * 14) * .12; drawPerson(DEF.manny, { x: m.wx, headY: GY - FEET, walk: m.walk, sway: Math.sin(m.walk * .5) * .05, armL: fx ? -2.45 + wig : m.dizzy > 0 ? -2.2 : undefined, armR: fx ? -.7 - wig : undefined }); head('manny', m.wx - s.cam, GY - FEET - 39); }
-    const pt = sh.party > 0, hop = pt ? Math.abs(Math.sin(t * 8)) * 12 : 0;
-    drawPerson(DEF.shiv, { x: sh.wx, headY: GY - FEET - hop, walk: sh.moving ? sh.walk : null, armL: pt ? -2.3 + Math.sin(t * 10) * .3 : undefined, armR: pt ? -.8 - Math.sin(t * 10) * .3 : undefined }); head('shiv', sh.wx - s.cam, GY - FEET - 39 - hop);
+    const so = { x: sh.wx, headY: GY - FEET, walk: sh.moving ? sh.walk : null };
+    const q = sh.siu;
+    if (q >= 0 && !sh.moving) {
+      if (q < .22) { so.headY += 10 * (q / .22); so.armL = .25; so.armR = Math.PI - .25; }
+      else if (q < .72) { const e = (q - .22) / .5; so.headY -= Math.sin(e * Math.PI) * 70; so.armL = .2; so.armR = Math.PI - .2; so.walk = 0; }
+      else { const e = Math.min(1, (q - .72) / .12); so.headY += 10 * e; so.walk = -Math.PI / 2; so.armL = lerp(.2, Math.PI / 2 + .6, e); so.armR = lerp(Math.PI - .2, Math.PI / 2 - .6, e); }
+    }
+    drawPerson(DEF.shiv, so); head('shiv', sh.wx - s.cam, so.headY - 39);
     drawPerson(DEF.power, { x: 2700, headY: GY - 52 - 89, sit: true, dir: -1, armR: -2.1, glass: false }); head('power', 2700 - s.cam, GY - 52 - 89 - 39);
   } else {
     const up = s.cheerT > .2 ? -2.5 : DOWN_R - .9, seat = GY - 52 - 89 + dr * 8;
